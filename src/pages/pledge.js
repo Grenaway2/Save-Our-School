@@ -5,19 +5,25 @@ import emailjs from '@emailjs/browser';
 export default function Pledge() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
+  const [pledgeAmount, setPledgeAmount] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [status, setStatus] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Pledge Form data:', { name, email, message });
+    console.log('Pledge Form data:', { name, email, pledgeAmount, isAnonymous });
     console.log('Environment variables:', {
       serviceID: process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
       templateID: process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID,
       userID: process.env.NEXT_PUBLIC_EMAILJS_USER_ID,
     });
 
-    if (!process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || !process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID || !process.env.NEXT_PUBLIC_EMAILJS_USER_ID) {
+    // Check for missing environment variables
+    if (
+      !process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID ||
+      !process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID ||
+      !process.env.NEXT_PUBLIC_EMAILJS_USER_ID
+    ) {
       setStatus('Error: Missing environment variables');
       console.error('Missing environment variables:', {
         serviceID: process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
@@ -27,75 +33,137 @@ export default function Pledge() {
       return;
     }
 
-    emailjs
-      .send(
+    try {
+      // Step 1: Send email via EmailJS
+      const emailResponse = await emailjs.send(
         process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
         process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID,
-        { name, email, message },
+        { name: isAnonymous ? 'Anonymous' : name, email, pledgeAmount },
         process.env.NEXT_PUBLIC_EMAILJS_USER_ID
-      )
-      .then((response) => {
-        console.log('Email sent successfully:', response);
-        setStatus('Pledge sent successfully!');
-        setName('');
-        setEmail('');
-        setMessage('');
-      })
-      .catch((error) => {
-        console.error('Email send error:', error);
-        setStatus('Failed to send pledge: ' + (error.text || 'Unknown error'));
+      );
+      console.log('Email sent successfully:', emailResponse);
+
+      // Step 2: Update tally via API
+      const apiResponse = await fetch('/api/pledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: pledgeAmount }),
       });
+
+      if (!apiResponse.ok) {
+        throw new Error('Failed to update pledge tally');
+      }
+
+      const { total } = await apiResponse.json();
+      console.log('Tally updated:', total);
+
+      // Step 3: Update status and reset form
+      setStatus(
+        `Thank you! Your pledge of $${pledgeAmount || 'any amount'} brings us to $${total.toFixed(2)} toward our $50,000 goal!`
+      );
+      setName('');
+      setEmail('');
+      setPledgeAmount('');
+      setIsAnonymous(false);
+    } catch (error) {
+      console.error('Error submitting pledge:', error);
+      setStatus('Failed to submit pledge: ' + (error.message || 'Unknown error'));
+    }
   };
 
   return (
     <>
       <Header />
       <div className="container mt-5">
-        <div className="row">
-          <div className="col-md-6 mx-auto">
-            <h1 className="display-5 mb-4 text-center">Pledge Your Support</h1>
-            <p className="text-center mb-4">
-              Help us save Blessed Sacrament School by pledging your support today. Let us know how you can contribute!
+        <div className="row justify-content-center">
+          <div className="col-md-6">
+            <h1 className="display-4 text-center mb-4" style={{ color: '#FFD700' }}>
+              Pledge to Save Blessed Sacrament
+            </h1>
+            <p className="lead text-center mb-4" style={{ color: '#333' }}>
+              No amount is too small—every pledge counts toward keeping our school open. Join our community, where pledges range from $10 to $500, and help us reach our $50,000 goal. Your support, big or small, makes a difference!
             </p>
-            <form onSubmit={handleSubmit} className="p-4 shadow-sm rounded bg-light">
-              <div className="mb-3">
-                <label htmlFor="name" className="form-label">Name</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label htmlFor="email" className="form-label">Email</label>
-                <input
-                  type="email"
-                  className="form-control"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label htmlFor="message" className="form-label">How can you help?</label>
-                <textarea
-                  className="form-control"
-                  id="message"
-                  rows="4"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  required
-                ></textarea>
-              </div>
-              <div className="text-center">
-                <button type="submit" className="btn btn-success btn-lg">Submit Pledge</button>
-              </div>
-            </form>
-            {status && <p className={`mt-3 text-center ${status.includes('successfully') ? 'text-success' : 'text-danger'}`}>{status}</p>}
+            <div className="card p-4 shadow-lg rounded" style={{ backgroundColor: '#f8f9fa' }}>
+              <form onSubmit={handleSubmit} className="needs-validation" noValidate>
+                <div className="mb-3">
+                  <label htmlFor="name" className="form-label">Your Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required={!isAnonymous}
+                    disabled={isAnonymous}
+                    placeholder="Enter your name (optional if anonymous)"
+                  />
+                  <div className="invalid-feedback">Please provide your name or choose to pledge anonymously.</div>
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="email" className="form-label">Your Email</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="Enter your email"
+                  />
+                  <div className="invalid-feedback">Please provide a valid email.</div>
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="pledgeAmount" className="form-label">Pledge Amount ($)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    id="pledgeAmount"
+                    value={pledgeAmount}
+                    onChange={(e) => setPledgeAmount(e.target.value)}
+                    min="1"
+                    step="0.01"
+                    placeholder="e.g., 10.00, 50.00, or more"
+                  />
+                  <div className="invalid-feedback">Please enter a pledge amount (minimum $1).</div>
+                </div>
+                <div className="mb-3 form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id="isAnonymous"
+                    checked={isAnonymous}
+                    onChange={(e) => setIsAnonymous(e.target.checked)}
+                  />
+                  <label className="form-check-label" htmlFor="isAnonymous">
+                    Pledge anonymously (name will not be shared)
+                  </label>
+                </div>
+                <div className="text-center">
+                  <button
+                    type="submit"
+                    className="btn btn-success btn-lg px-5 py-2"
+                    style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
+                  >
+                    Pledge Now
+                  </button>
+                </div>
+              </form>
+              {status && (
+                <p
+                  className={`mt-3 text-center ${
+                    status.includes('Thank you') ? 'text-success' : 'text-danger'
+                  }`}
+                >
+                  {status}
+                </p>
+              )}
+            </div>
+            <p className="text-center mt-4" style={{ color: '#666' }}>
+              Your pledge, no matter the size, supports our $100,000 goal. See how we’re doing:{' '}
+              <a href="/" className="text-decoration-none" style={{ color: '#FFD700' }}>
+                View Tally
+              </a>
+            </p>
           </div>
         </div>
       </div>
