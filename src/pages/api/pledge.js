@@ -7,8 +7,28 @@ export default async function handler(req, res) {
   res.setHeader('Surrogate-Control', 'no-store');
 
   if (req.method === 'POST') {
-    const { amount, name, isAnonymous } = req.body;
+    const { amount, name, isAnonymous, email } = req.body;
     const numericAmount = parseFloat(amount || 0);
+
+    // Skip if amount is zero or negative
+    if (numericAmount <= 0) {
+      return res.status(400).json({ error: 'Pledge amount must be greater than $0' });
+    }
+
+    // Generate a unique key for this submission (e.g., email + timestamp)
+    const submissionKey = `submission:${email}:${Date.now()}`;
+    const recentSubmissions = await kv.get(`submissions:${email}`) || [];
+
+    // Check for duplicate within the last 5 seconds
+    const isDuplicate = recentSubmissions.some(sub => Date.now() - sub.timestamp < 5000);
+    if (isDuplicate) {
+      return res.status(429).json({ error: 'Duplicate submission detected. Please wait before trying again.' });
+    }
+
+    // Add current submission to recent submissions list
+    recentSubmissions.push({ timestamp: Date.now() });
+    if (recentSubmissions.length > 5) recentSubmissions.shift(); // Keep last 5 submissions
+    await kv.set(`submissions:${email}`, recentSubmissions, { ex: 60 }); // Expire after 60 seconds
 
     const currentTotal = (await kv.get('pledgeTotal')) || 0;
     const newTotal = currentTotal + numericAmount;

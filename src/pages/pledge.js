@@ -9,62 +9,66 @@ export default function Pledge() {
   const [pledgeAmount, setPledgeAmount] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [status, setStatus] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false); // New state to track submission
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent multiple submissions
+    setIsSubmitting(true); // Disable button
     console.log('Pledge Form data:', { name, email, pledgeAmount, isAnonymous });
 
     // Basic validation
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setStatus('Please enter a valid email address.');
+      setIsSubmitting(false); // Re-enable button
       return;
     }
     if (!pledgeAmount || isNaN(pledgeAmount) || parseFloat(pledgeAmount) < 1) {
       setStatus('Please enter a valid pledge amount (minimum $1).');
+      setIsSubmitting(false); // Re-enable button
       return;
     }
     if (!isAnonymous && (!name || name.trim().length === 0)) {
       setStatus('Please enter your name or choose to pledge anonymously.');
+      setIsSubmitting(false); // Re-enable button
       return;
     }
 
-    console.log('Environment variables:', {
+    // Check environment variables
+    const envVars = {
       serviceID: process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
       pledgeTemplateID: process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID,
       thankYouTemplateID: process.env.NEXT_PUBLIC_EMAILJS_THANKYOU_TEMPLATE_ID,
       userID: process.env.NEXT_PUBLIC_EMAILJS_USER_ID,
-    });
+    };
+    console.log('Environment variables:', envVars);
 
     if (
-      !process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID ||
-      !process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID ||
-      !process.env.NEXT_PUBLIC_EMAILJS_THANKYOU_TEMPLATE_ID ||
-      !process.env.NEXT_PUBLIC_EMAILJS_USER_ID
+      !envVars.serviceID ||
+      !envVars.pledgeTemplateID ||
+      !envVars.thankYouTemplateID ||
+      !envVars.userID
     ) {
-      setStatus('Error: Missing environment variables');
-      console.error('Missing environment variables:', {
-        serviceID: process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
-        pledgeTemplateID: process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID,
-        thankYouTemplateID: process.env.NEXT_PUBLIC_EMAILJS_THANKYOU_TEMPLATE_ID,
-        userID: process.env.NEXT_PUBLIC_EMAILJS_USER_ID,
-      });
+      console.error('Missing environment variables:', envVars);
+      setStatus('Error: Email service is not configured. Please contact support.');
+      setIsSubmitting(false); // Re-enable button
       return;
     }
 
     try {
       const teamEmailResponse = await emailjs.send(
-        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
-        process.env.NEXT_PUBLIC_EMAILJS_PLEDGE_TEMPLATE_ID,
+        envVars.serviceID,
+        envVars.pledgeTemplateID,
         { name: isAnonymous ? 'Anonymous' : name.trim(), email, pledgeAmount },
-        process.env.NEXT_PUBLIC_EMAILJS_USER_ID
+        envVars.userID
       );
       console.log('Team email sent successfully:', teamEmailResponse);
 
       const donorEmailResponse = await emailjs.send(
-        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID,
-        process.env.NEXT_PUBLIC_EMAILJS_THANKYOU_TEMPLATE_ID,
+        envVars.serviceID,
+        envVars.thankYouTemplateID,
         { name: isAnonymous ? 'Anonymous' : name.trim(), email, pledgeAmount },
-        process.env.NEXT_PUBLIC_EMAILJS_USER_ID
+        envVars.userID
       );
       console.log('Donor thank-you email sent successfully:', donorEmailResponse);
 
@@ -72,7 +76,7 @@ export default function Pledge() {
       const apiResponse = await fetch('/api/pledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: pledgeAmount, name: name.trim(), isAnonymous }),
+        body: JSON.stringify({ amount: pledgeAmount, name: name.trim(), isAnonymous, email }),
       });
 
       if (!apiResponse.ok) {
@@ -91,7 +95,9 @@ export default function Pledge() {
       setIsAnonymous(false);
     } catch (error) {
       console.error('Error submitting pledge:', error);
-      setStatus('Failed to submit pledge: ' + (error.message || 'Unknown error'));
+      setStatus('Failed to submit pledge: ' + (error.message || 'Unknown error. Please try again or contact support.'));
+    } finally {
+      setIsSubmitting(false); // Re-enable button after completion (success or failure)
     }
   };
 
@@ -109,7 +115,7 @@ export default function Pledge() {
         {/* Open Graph tags for social media */}
         <meta property="og:title" content="Pledge to Save Blessed Sacrament School" />
         <meta
-          property="og:description"
+          name="og:description"
           content="Support Blessed Sacrament School in Erie with your pledge. Help us reach our $100,000 goal!"
         />
         <meta property="og:type" content="website" />
@@ -188,8 +194,9 @@ export default function Pledge() {
                     type="submit"
                     className="btn btn-success btn-lg px-5 py-2"
                     style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
+                    disabled={isSubmitting} // Disable button while submitting
                   >
-                    Pledge Now
+                    {isSubmitting ? 'Submitting...' : 'Pledge Now'}
                   </button>
                 </div>
               </form>

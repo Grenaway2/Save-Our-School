@@ -130,7 +130,7 @@ export default function Home() {
               Why Your Support Matters
             </h3>
             <p className="text-muted" style={{ fontSize: '1.1rem', lineHeight: '1.7' }}>
-            We are committed to keeping our school open and returning it to parish control, where it can thrive under the care of those who value it most.
+            We are committed to keeping our school open and returning it to the parish, where it can thrive under the care of those who value it most.
             </p>
             <h4 className="mt-4 mb-3 text-dark fw-bold" style={{ fontSize: '1.5rem', color: '#FFD700', borderBottom: '2px solid #FFD700' }}>
               Public Supporters
