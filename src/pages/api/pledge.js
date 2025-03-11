@@ -1,4 +1,3 @@
-// pages/api/pledge.js
 import { kv } from '@vercel/kv';
 
 export default async function handler(req, res) {
@@ -23,7 +22,6 @@ export default async function handler(req, res) {
     await kv.lpush('pledges', pledgeEntry);
 
     res.status(200).json({ total: newTotal });
-
   } else if (req.method === 'GET') {
     const total = (await kv.get('pledgeTotal')) || 0;
     const pledges = (await kv.lrange('pledges', 0, -1)) || [];
